@@ -1,17 +1,20 @@
-# Build and system files
+# Build and dependency directories
 build/
-bin/
-obj/
-out/
-.vs/
-.vscode/
-
-# vcpkg
 vcpkg/
-vcpkg_installed/
+.vscode/
+.idea/
 
-# Compiled shaders
-*.spv
+# OS generated files
+.DS_Store
+Thumbs.db
 
-# Logs
-*.log
+# Project management and meta files (requested to be ignored)
+roadmap.md
+evaluation.md
+implementation_plan.md
+logic_tree.md
+roles/
+
+# Local configuration/state
+.gemini/
+*.user

@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "Logger.h"
+#include "renderer/VulkanRenderer.h"
 
 namespace VE {
     Application* Application::s_Instance = nullptr;
@@ -7,7 +8,9 @@ namespace VE {
     Application::Application() {
         s_Instance = this;
         Logger::Init();
-        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine Faz 0"));
+        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine Faz 1"));
+        m_Renderer = std::make_unique<VulkanRenderer>(m_Window->GetNativeWindow());
+        m_Renderer->Init();
     }
 
     Application::~Application() {
@@ -18,6 +21,7 @@ namespace VE {
         
         while (!m_Window->ShouldClose()) {
             m_Window->PollEvents();
+            m_Renderer->DrawFrame();
         }
     }
 }

@@ -4,6 +4,8 @@
 #include <memory>
 
 namespace VE {
+    class VulkanRenderer;
+
     class Application {
     public:
         Application();
@@ -16,6 +18,7 @@ namespace VE {
 
     private:
         std::unique_ptr<Window> m_Window;
+        std::unique_ptr<VulkanRenderer> m_Renderer;
         bool m_Running = true;
         
         static Application* s_Instance;

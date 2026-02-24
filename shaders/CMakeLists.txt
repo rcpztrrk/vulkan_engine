@@ -22,7 +22,7 @@ function(compile_shader SHADER_NAME STAGE)
 endfunction()
 
 # Example shaders (Faz 0 placeholders)
-# compile_shader(basic vert)
-# compile_shader(basic frag)
+compile_shader(basic vert)
+compile_shader(basic frag)
 
 add_custom_target(Shaders ALL DEPENDS ${SHADER_SPVS})
