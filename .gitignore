@@ -1,0 +1,17 @@
+# Build and system files
+build/
+bin/
+obj/
+out/
+.vs/
+.vscode/
+
+# vcpkg
+vcpkg/
+vcpkg_installed/
+
+# Compiled shaders
+*.spv
+
+# Logs
+*.log
