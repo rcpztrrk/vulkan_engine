@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <chrono>
+#include <tuple>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -32,8 +33,9 @@ namespace VE {
     };
 
     struct Vertex {
-        glm::vec2 pos;
+        glm::vec3 pos;
         glm::vec3 color;
+        glm::vec2 texCoord;
 
         static VkVertexInputBindingDescription getBindingDescription() {
             VkVertexInputBindingDescription bindingDescription{};
@@ -43,12 +45,12 @@ namespace VE {
             return bindingDescription;
         }
 
-        static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-            std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+            std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
             attributeDescriptions[0].binding = 0;
             attributeDescriptions[0].location = 0;
-            attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+            attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
             attributeDescriptions[0].offset = offsetof(Vertex, pos);
 
             attributeDescriptions[1].binding = 0;
@@ -56,7 +58,27 @@ namespace VE {
             attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
             attributeDescriptions[1].offset = offsetof(Vertex, color);
 
+            attributeDescriptions[2].binding = 0;
+            attributeDescriptions[2].location = 2;
+            attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+            attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
             return attributeDescriptions;
+        }
+
+        bool operator<(const Vertex& other) const {
+            if (pos != other.pos) {
+                if (pos.x != other.pos.x) return pos.x < other.pos.x;
+                if (pos.y != other.pos.y) return pos.y < other.pos.y;
+                return pos.z < other.pos.z;
+            }
+            if (color != other.color) {
+                if (color.r != other.color.r) return color.r < other.color.r;
+                if (color.g != other.color.g) return color.g < other.color.g;
+                return color.b < other.color.b;
+            }
+            if (texCoord.x != other.texCoord.x) return texCoord.x < other.texCoord.x;
+            return texCoord.y < other.texCoord.y;
         }
     };
 
@@ -85,12 +107,18 @@ namespace VE {
         void createRenderPass();
         void createDescriptorSetLayout();
         void createGraphicsPipeline();
-        void createFramebuffers();
         void createCommandPool();
+        void createDepthResources();
+        void createFramebuffers();
         void createVertexBuffer();
+        void createIndexBuffer();
         void createUniformBuffers();
         void createDescriptorPool();
         void createDescriptorSets();
+        void createTextureImage();
+        void createTextureImageView();
+        void createTextureSampler();
+        void loadModel();
         void createCommandBuffers();
         void createSyncObjects();
 
@@ -116,6 +144,15 @@ namespace VE {
         uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
         void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
         void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+        VkCommandBuffer beginSingleTimeCommands();
+        void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+        void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+        VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+        void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+        void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+        VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+        VkFormat findDepthFormat();
+        bool hasStencilComponent(VkFormat format);
 
     private:
         GLFWwindow* m_Window;
@@ -136,6 +173,10 @@ namespace VE {
         VkExtent2D m_SwapChainExtent;
         std::vector<VkImageView> m_SwapChainImageViews;
         
+        VkImage m_DepthImage = VK_NULL_HANDLE;
+        VkDeviceMemory m_DepthImageMemory = VK_NULL_HANDLE;
+        VkImageView m_DepthImageView = VK_NULL_HANDLE;
+
         VkRenderPass m_RenderPass = VK_NULL_HANDLE;
         std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 
@@ -148,6 +189,9 @@ namespace VE {
         VkBuffer m_VertexBuffer = VK_NULL_HANDLE;
         VkDeviceMemory m_VertexBufferMemory = VK_NULL_HANDLE;
 
+        VkBuffer m_IndexBuffer = VK_NULL_HANDLE;
+        VkDeviceMemory m_IndexBufferMemory = VK_NULL_HANDLE;
+
         std::vector<VkBuffer> m_UniformBuffers;
         std::vector<VkDeviceMemory> m_UniformBuffersMemory;
         std::vector<void*> m_UniformBuffersMapped;
@@ -155,6 +199,14 @@ namespace VE {
         VkDescriptorSetLayout m_DescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
         std::vector<VkDescriptorSet> m_DescriptorSets;
+
+        VkImage m_TextureImage = VK_NULL_HANDLE;
+        VkDeviceMemory m_TextureImageMemory = VK_NULL_HANDLE;
+        VkImageView m_TextureImageView = VK_NULL_HANDLE;
+        VkSampler m_TextureSampler = VK_NULL_HANDLE;
+
+        std::vector<Vertex> m_Vertices;
+        std::vector<uint32_t> m_Indices;
 
         std::vector<VkSemaphore> m_ImageAvailableSemaphores;
         std::vector<VkSemaphore> m_RenderFinishedSemaphores;

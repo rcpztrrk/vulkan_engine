@@ -4,6 +4,8 @@
     "dependencies": [
         "glfw3",
         "spdlog",
-        "glm"
+        "glm",
+        "stb",
+        "tinyobjloader"
     ]
 }

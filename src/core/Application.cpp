@@ -8,7 +8,7 @@ namespace VE {
     Application::Application() {
         s_Instance = this;
         Logger::Init();
-        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine Faz 2"));
+        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine Faz 3"));
         m_Renderer = std::make_unique<VulkanRenderer>(m_Window->GetNativeWindow());
         m_Renderer->Init();
     }
