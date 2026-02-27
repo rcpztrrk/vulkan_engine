@@ -9,6 +9,9 @@
 #include <chrono>
 #include <entt/entt.hpp>
 #include "core/Components.h"
+#include "tools/Profiler.h"
+#include "tools/EntityInspector.h"
+#include "renderer/Camera.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -81,10 +84,17 @@ namespace VE {
         createDescriptorSets();
         createCommandBuffers();
         createSyncObjects();
+        initImGui();
         VE_CORE_INFO("VulkanRenderer başarıyla başlatıldı.");
     }
 
     void VulkanRenderer::Shutdown() {
+        if (m_ImGuiDescriptorPool != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(m_Device, m_ImGuiDescriptorPool, nullptr);
+        }
+
+        cleanupImGui();
+
         if (m_Device != VK_NULL_HANDLE) {
             vkDeviceWaitIdle(m_Device);
         }
@@ -495,6 +505,40 @@ namespace VE {
 
         m_SwapChainImageFormat = surfaceFormat.format;
         m_SwapChainExtent = extent;
+    }
+
+    void VulkanRenderer::cleanupSwapChain() {
+        vkDestroyImageView(m_Device, m_DepthImageView, nullptr);
+        vkDestroyImage(m_Device, m_DepthImage, nullptr);
+        vkFreeMemory(m_Device, m_DepthImageMemory, nullptr);
+
+        for (auto framebuffer : m_SwapChainFramebuffers) {
+            vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
+        }
+
+        for (auto imageView : m_SwapChainImageViews) {
+            vkDestroyImageView(m_Device, imageView, nullptr);
+        }
+
+        vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
+    }
+
+    void VulkanRenderer::recreateSwapChain() {
+        int width = 0, height = 0;
+        glfwGetFramebufferSize(m_Window, &width, &height);
+        while (width == 0 || height == 0) {
+            glfwGetFramebufferSize(m_Window, &width, &height);
+            glfwWaitEvents();
+        }
+
+        vkDeviceWaitIdle(m_Device);
+
+        cleanupSwapChain();
+
+        createSwapChain();
+        createImageViews();
+        createDepthResources();
+        createFramebuffers();
     }
 
     VkImageView VulkanRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags) {
@@ -1241,7 +1285,7 @@ namespace VE {
         }
     }
 
-    void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, entt::registry& registry) {
+    void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, entt::registry& registry, FlyCamera& camera) {
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -1287,9 +1331,8 @@ namespace VE {
         scissor.extent = m_SwapChainExtent;
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        // Update View/Proj
-        updateUniformBuffer(m_CurrentFrame, glm::mat4(1.0f)); 
-
+        // Viewport and Scissor properties already set by vkCmdSetViewport and vkCmdSetScissor
+        // No longer need to call updateUniformBuffer here, it's called in DrawFrame
         auto view = registry.view<MeshComponent, TransformComponent>();
         for (auto entity : view) {
             auto& tc = view.get<TransformComponent>(entity);
@@ -1310,6 +1353,19 @@ namespace VE {
 
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_Indices.size()), 1, 0, 0, 0);
         }
+
+        // Render UI
+        beginUI();
+        Profiler::OnUIRender();
+        EntityInspector::OnUIRender(registry);
+        
+        ImGui::Begin("Camera Settings");
+        ImGui::DragFloat("Move Speed", &camera.m_MoveSpeed, 0.1f, 0.1f, 100.0f);
+        ImGui::DragFloat("Sprint Multiplier", &camera.m_SprintMultiplier, 0.1f, 1.0f, 10.0f);
+        ImGui::DragFloat("Mouse Sensitivity", &camera.m_MouseSensitivity, 0.01f, 0.01f, 1.0f);
+        ImGui::End();
+
+        endUI(commandBuffer);
 
         vkCmdEndRenderPass(commandBuffer);
 
@@ -1339,39 +1395,33 @@ namespace VE {
         }
     }
 
-    void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, const glm::mat4& modelMatrix) {
-        static auto startTime = std::chrono::high_resolution_clock::now();
-
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
+    void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, const FlyCamera& camera) {
         UniformBufferObject ubo{};
-        // ubo.model is gone, it's in Push Constants now
-        ubo.view = glm::lookAt(glm::vec3(15.0f, 15.0f, 15.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChainExtent.width / (float) m_SwapChainExtent.height, 0.1f, 100.0f);
-        ubo.proj[1][1] *= -1;
+        ubo.view = camera.GetViewMatrix();
+        ubo.proj = camera.GetProjectionMatrix();
 
         memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
 
-    void VulkanRenderer::DrawFrame(entt::registry& registry) {
+    void VulkanRenderer::DrawFrame(entt::registry& registry, FlyCamera& camera) {
         vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(m_Device, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-            // Swapchain recreate (TBD in Faz 1 polish)
+            recreateSwapChain();
             return;
         } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-            throw std::runtime_error("Swapchain imajı alınamadı!");
+            throw std::runtime_error("Swap Chain görüntüsü alınamadı!");
         }
+
+        updateUniformBuffer(m_CurrentFrame, camera);
 
         vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
-
-        recordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex, registry);
+        recordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex, registry, camera);
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1494,5 +1544,76 @@ namespace VE {
                 m_Indices.push_back(uniqueVertices[vertex]);
             }
         }
+    }
+
+    void VulkanRenderer::initImGui() {
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+        };
+
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
+        pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+
+        if (vkCreateDescriptorPool(m_Device, &pool_info, nullptr, &m_ImGuiDescriptorPool) != VK_SUCCESS) {
+            throw std::runtime_error("ImGui Descriptor Pool oluşturulamadı!");
+        }
+
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+        ImGui::StyleColorsDark();
+
+        ImGui_ImplGlfw_InitForVulkan(m_Window, true);
+        ImGui_ImplVulkan_InitInfo init_info = {};
+        init_info.Instance = m_Instance;
+        init_info.PhysicalDevice = m_PhysicalDevice;
+        init_info.Device = m_Device;
+        init_info.QueueFamily = findQueueFamilies(m_PhysicalDevice).graphicsFamily.value();
+        init_info.Queue = m_GraphicsQueue;
+        init_info.PipelineCache = VK_NULL_HANDLE;
+        init_info.DescriptorPool = m_ImGuiDescriptorPool;
+        init_info.RenderPass = m_RenderPass;
+        init_info.Subpass = 0;
+        init_info.MinImageCount = MAX_FRAMES_IN_FLIGHT;
+        init_info.ImageCount = MAX_FRAMES_IN_FLIGHT;
+        init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        init_info.Allocator = nullptr;
+        ImGui_ImplVulkan_Init(&init_info);
+
+        ImGui_ImplVulkan_CreateFontsTexture();
+    }
+
+    void VulkanRenderer::cleanupImGui() {
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+    }
+
+    void VulkanRenderer::beginUI() {
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+    }
+
+    void VulkanRenderer::endUI(VkCommandBuffer commandBuffer) {
+        ImGui::Render();
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
     }
 }

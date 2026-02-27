@@ -13,4 +13,5 @@ target_link_libraries(VulkanEngine PRIVATE
     spdlog::spdlog_header_only
     glm::glm
     EnTT::EnTT
+    imgui::imgui
 )

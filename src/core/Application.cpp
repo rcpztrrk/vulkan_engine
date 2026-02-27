@@ -1,6 +1,8 @@
 #include "Application.h"
 #include "Logger.h"
 #include "Components.h"
+#include "tools/Profiler.h"
+#include "core/Input.h"
 
 namespace VE {
     Application* Application::s_Instance = nullptr;
@@ -8,12 +10,14 @@ namespace VE {
     Application::Application() {
         s_Instance = this;
         Logger::Init();
-        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine Faz 4 - ECS"));
+        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine - Phase 4"));
         m_Renderer = std::make_unique<VulkanRenderer>(m_Window->GetNativeWindow());
         m_Renderer->Init();
 
         m_PhysicsEngine = std::make_unique<PhysicsEngine>();
         m_Scene = std::make_unique<Scene>();
+        m_Camera = std::make_unique<FlyCamera>(45.0f, 1280.0f / 720.0f, 0.1f, 100.0f);
+        m_LastFrameTime = std::chrono::high_resolution_clock::now();
 
         // Create floor
         auto floor = m_Scene->CreateEntity("Floor");
@@ -39,27 +43,28 @@ namespace VE {
     }
 
     void Application::Run() {
-        VE_CORE_TRACE("Uygulama döngüsü başlatıldı.");
-        
-        float lastFrameTime = 0.0f;
+        VE_CORE_TRACE("Application loop started.");
         
         while (!m_Window->ShouldClose()) {
-            float time = (float)glfwGetTime();
-            float dt = time - lastFrameTime;
-            lastFrameTime = time;
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            m_DeltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - m_LastFrameTime).count();
+            m_LastFrameTime = currentTime;
 
             m_Window->PollEvents();
+            m_Camera->OnUpdate(m_DeltaTime);
+            Profiler::Update(m_DeltaTime);
 
             const float fixedDt = 1.0f / 60.0f;
             static float accumulator = 0.0f;
-            accumulator += dt;
+            accumulator += m_DeltaTime;
 
             while (accumulator >= fixedDt) {
                 m_PhysicsEngine->Update(fixedDt, m_Scene->GetRegistry());
                 accumulator -= fixedDt;
             }
 
-            m_Renderer->DrawFrame(m_Scene->GetRegistry());
+            m_Renderer->DrawFrame(m_Scene->GetRegistry(), *m_Camera);
+            Input::TransitionStates();
         }
     }
 }

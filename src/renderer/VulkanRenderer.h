@@ -6,10 +6,17 @@
 #include <map>
 #include <array>
 #include <optional>
+#include <set>
 #include <string>
 #include <chrono>
 #include <tuple>
 #include <entt/entt.hpp>
+
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
+
+#include "core/Components.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -92,6 +99,8 @@ namespace VE {
         glm::mat4 model;
     };
 
+    class FlyCamera;
+
     class VulkanRenderer {
     public:
         VulkanRenderer(GLFWwindow* window);
@@ -127,11 +136,11 @@ namespace VE {
         void createSyncObjects();
 
     public:
-        void DrawFrame(entt::registry& registry);
-        void updateUniformBuffer(uint32_t currentImage, const glm::mat4& modelMatrix);
+        void DrawFrame(entt::registry& registry, FlyCamera& camera);
+        void updateUniformBuffer(uint32_t currentImage, const FlyCamera& camera);
 
     private:
-        void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, entt::registry& registry);
+        void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, entt::registry& registry, FlyCamera& camera);
 
         // Helper functions
         static std::vector<char> readFile(const std::string& filename);
@@ -156,7 +165,15 @@ namespace VE {
         void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
         VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
         VkFormat findDepthFormat();
+        void recreateSwapChain();
+        void cleanupSwapChain();
         bool hasStencilComponent(VkFormat format);
+
+        // ImGui methods
+        void initImGui();
+        void cleanupImGui();
+        void beginUI();
+        void endUI(VkCommandBuffer commandBuffer);
 
     private:
         GLFWwindow* m_Window;
@@ -202,6 +219,7 @@ namespace VE {
 
         VkDescriptorSetLayout m_DescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
+        VkDescriptorPool m_ImGuiDescriptorPool; // Dedicated pool for ImGui
         std::vector<VkDescriptorSet> m_DescriptorSets;
 
         VkImage m_TextureImage = VK_NULL_HANDLE;
