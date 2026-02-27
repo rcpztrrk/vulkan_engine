@@ -12,4 +12,5 @@ target_link_libraries(VulkanEngine PRIVATE
     glfw
     spdlog::spdlog_header_only
     glm::glm
+    EnTT::EnTT
 )

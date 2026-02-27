@@ -14,6 +14,7 @@ evaluation.md
 implementation_plan.md
 logic_tree.md
 roles/
+docs/planning/
 
 # Local configuration/state
 .gemini/

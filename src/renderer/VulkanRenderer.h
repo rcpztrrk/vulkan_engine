@@ -9,6 +9,7 @@
 #include <string>
 #include <chrono>
 #include <tuple>
+#include <entt/entt.hpp>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -83,9 +84,12 @@ namespace VE {
     };
 
     struct UniformBufferObject {
-        glm::mat4 model;
         glm::mat4 view;
         glm::mat4 proj;
+    };
+
+    struct MeshPushConstants {
+        glm::mat4 model;
     };
 
     class VulkanRenderer {
@@ -123,11 +127,11 @@ namespace VE {
         void createSyncObjects();
 
     public:
-        void DrawFrame();
-        void updateUniformBuffer(uint32_t currentImage);
+        void DrawFrame(entt::registry& registry);
+        void updateUniformBuffer(uint32_t currentImage, const glm::mat4& modelMatrix);
 
     private:
-        void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, entt::registry& registry);
 
         // Helper functions
         static std::vector<char> readFile(const std::string& filename);

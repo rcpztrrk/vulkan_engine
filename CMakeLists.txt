@@ -11,6 +11,7 @@ find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
+find_package(EnTT CONFIG REQUIRED)
 
 add_subdirectory(src)
 add_subdirectory(shaders)

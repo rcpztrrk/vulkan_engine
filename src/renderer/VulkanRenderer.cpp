@@ -7,6 +7,8 @@
 #include <limits>
 #include <fstream>
 #include <chrono>
+#include <entt/entt.hpp>
+#include "core/Components.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -606,8 +608,8 @@ namespace VE {
     }
 
     void VulkanRenderer::createGraphicsPipeline() {
-        auto vertShaderCode = readFile("build/shaders/basic.vert.spv");
-        auto fragShaderCode = readFile("build/shaders/basic.frag.spv");
+        auto vertShaderCode = readFile("shaders/basic.vert.spv");
+        auto fragShaderCode = readFile("shaders/basic.frag.spv");
 
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -689,6 +691,14 @@ namespace VE {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout;
+
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(MeshPushConstants);
+
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
         if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("Pipeline Layout oluşturulamadı!");
@@ -1231,7 +1241,7 @@ namespace VE {
         }
     }
 
-    void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+    void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, entt::registry& registry) {
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -1247,7 +1257,7 @@ namespace VE {
         renderPassInfo.renderArea.extent = m_SwapChainExtent;
 
         std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = {{0.02f, 0.02f, 0.02f, 1.0f}};
+        clearValues[0].color = {{0.12f, 0.12f, 0.12f, 1.0f}}; // Elegant dark gray
         clearValues[1].depthStencil = {1.0f, 0};
 
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -1262,9 +1272,7 @@ namespace VE {
         
         vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
-
-        // Viewport ve Scissor
+        // Viewport and Scissor
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
@@ -1275,11 +1283,33 @@ namespace VE {
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
         VkRect2D scissor{};
-        scissor.offset = {0, 0};
+        scissor.offset = { 0, 0 };
         scissor.extent = m_SwapChainExtent;
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_Indices.size()), 1, 0, 0, 0);
+        // Update View/Proj
+        updateUniformBuffer(m_CurrentFrame, glm::mat4(1.0f)); 
+
+        auto view = registry.view<MeshComponent, TransformComponent>();
+        for (auto entity : view) {
+            auto& tc = view.get<TransformComponent>(entity);
+            
+            MeshPushConstants pcs{};
+            pcs.model = tc.GetTransform();
+
+            vkCmdPushConstants(
+                commandBuffer, 
+                m_PipelineLayout, 
+                VK_SHADER_STAGE_VERTEX_BIT, 
+                0, 
+                sizeof(MeshPushConstants), 
+                &pcs
+            );
+
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
+
+            vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(m_Indices.size()), 1, 0, 0, 0);
+        }
 
         vkCmdEndRenderPass(commandBuffer);
 
@@ -1309,22 +1339,22 @@ namespace VE {
         }
     }
 
-    void VulkanRenderer::updateUniformBuffer(uint32_t currentImage) {
+    void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, const glm::mat4& modelMatrix) {
         static auto startTime = std::chrono::high_resolution_clock::now();
 
         auto currentTime = std::chrono::high_resolution_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
         UniformBufferObject ubo{};
-        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.5f, 1.0f, 0.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChainExtent.width / (float) m_SwapChainExtent.height, 0.1f, 10.0f);
+        // ubo.model is gone, it's in Push Constants now
+        ubo.view = glm::lookAt(glm::vec3(15.0f, 15.0f, 15.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), m_SwapChainExtent.width / (float) m_SwapChainExtent.height, 0.1f, 100.0f);
         ubo.proj[1][1] *= -1;
 
         memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
 
-    void VulkanRenderer::DrawFrame() {
+    void VulkanRenderer::DrawFrame(entt::registry& registry) {
         vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 
         uint32_t imageIndex;
@@ -1341,9 +1371,7 @@ namespace VE {
 
         vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 
-        updateUniformBuffer(m_CurrentFrame);
-
-        recordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex);
+        recordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex, registry);
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1433,8 +1461,9 @@ namespace VE {
         std::string warn, err;
 
         if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
-            throw std::runtime_error(warn + err);
+            throw std::runtime_error("Model yüklenemedi: " + warn + err);
         }
+        VE_CORE_INFO("Model başarıyla yüklendi: {0}, Vertices: {1}", MODEL_PATH, attrib.vertices.size() / 3);
 
         std::map<Vertex, uint32_t> uniqueVertices{};
 
