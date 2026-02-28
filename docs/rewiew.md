@@ -6,16 +6,9 @@
 - ECS yaklaşımı (`EnTT`) ve sabit fizik adımı (`fixedDt`) iyi bir temel.
 
 ## Kritik Bulgular
-1. Pencere başlatma hatasında sessiz devam riski var. `glfwInit`/`glfwCreateWindow` başarısızsa sadece `return` ediliyor; bu durumda uygulama null pencereyle rendereri başlatabilir (çökme riski).
-   - `src/core/Window.cpp:9`
-   - `src/core/Window.cpp:17`
-
-2. Present tarafında swapchain yenileme eksik bırakılmış (`TBD`). `vkQueuePresentKHR` sonucu `OUT_OF_DATE/SUBOPTIMAL` olduğunda yeniden oluşturma çağrılmıyor.
-   - `src/renderer/VulkanRenderer.cpp:1406`
-   - `src/renderer/VulkanRenderer.cpp:1460`
-
-3. Profilerde sıfıra bölme riski var (`deltaTime == 0` olursa).
-   - `src/tools/Profiler.cpp:13`
+1. [DONE] Pencere başlatma hatasında sessiz devam riski var. Exception eklendi.
+2. [DONE] Present tarafında swapchain yenileme tamamlandı.
+3. [DONE] Profiler'da sıfıra bölme riski guard ile engellendi.
 
 ## Orta Seviye Riskler
 - Test altyapısı pratikte yok (`tests/` boş, `add_test/ctest` yok). Regresyon riski yüksek.

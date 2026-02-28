@@ -7,8 +7,7 @@ namespace VE {
         VE_CORE_INFO("Pencere oluşturuluyor: {0} ({1}, {2})", props.Title, props.Width, props.Height);
 
         if (!glfwInit()) {
-            VE_CORE_CRITICAL("GLFW başlatılamadı!");
-            return;
+            throw std::runtime_error("GLFW başlatılamadı!");
         }
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -17,8 +16,7 @@ namespace VE {
         m_Window = glfwCreateWindow((int)props.Width, (int)props.Height, props.Title.c_str(), nullptr, nullptr);
         
         if (!m_Window) {
-            VE_CORE_CRITICAL("GLFW Penceresi oluşturulamadı!");
-            return;
+            throw std::runtime_error("Pencere oluşturulamadı!");
         }
 
         glfwSetWindowUserPointer(m_Window, this);

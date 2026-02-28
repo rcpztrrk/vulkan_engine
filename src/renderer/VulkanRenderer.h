@@ -43,6 +43,7 @@ namespace VE {
     struct Vertex {
         glm::vec3 pos;
         glm::vec3 color;
+        glm::vec3 normal;
         glm::vec2 texCoord;
 
         static VkVertexInputBindingDescription getBindingDescription() {
@@ -53,8 +54,8 @@ namespace VE {
             return bindingDescription;
         }
 
-        static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-            std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+        static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions() {
+            std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
 
             attributeDescriptions[0].binding = 0;
             attributeDescriptions[0].location = 0;
@@ -68,8 +69,13 @@ namespace VE {
 
             attributeDescriptions[2].binding = 0;
             attributeDescriptions[2].location = 2;
-            attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-            attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+            attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+            attributeDescriptions[2].offset = offsetof(Vertex, normal);
+
+            attributeDescriptions[3].binding = 0;
+            attributeDescriptions[3].location = 3;
+            attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;
+            attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
 
             return attributeDescriptions;
         }
@@ -85,6 +91,11 @@ namespace VE {
                 if (color.g != other.color.g) return color.g < other.color.g;
                 return color.b < other.color.b;
             }
+            if (normal != other.normal) {
+                if (normal.x != other.normal.x) return normal.x < other.normal.x;
+                if (normal.y != other.normal.y) return normal.y < other.normal.y;
+                return normal.z < other.normal.z;
+            }
             if (texCoord.x != other.texCoord.x) return texCoord.x < other.texCoord.x;
             return texCoord.y < other.texCoord.y;
         }
@@ -93,6 +104,9 @@ namespace VE {
     struct UniformBufferObject {
         glm::mat4 view;
         glm::mat4 proj;
+        glm::vec4 lightPos;   // vec4 for 16-byte alignment
+        glm::vec4 lightColor; // vec4 for 16-byte alignment
+        glm::vec4 viewPos;    // vec4 for 16-byte alignment
     };
 
     struct MeshPushConstants {
@@ -233,6 +247,7 @@ namespace VE {
         std::vector<VkSemaphore> m_ImageAvailableSemaphores;
         std::vector<VkSemaphore> m_RenderFinishedSemaphores;
         std::vector<VkFence> m_InFlightFences;
+        std::vector<VkFence> m_ImagesInFlight; // To track if a swapchain image is in use
 
         uint32_t m_CurrentFrame = 0;
         const int MAX_FRAMES_IN_FLIGHT = 2;

@@ -826,7 +826,7 @@ namespace VE {
         uboLayoutBinding.binding = 0;
         uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         uboLayoutBinding.descriptorCount = 1;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         uboLayoutBinding.pImmutableSamplers = nullptr;
 
         VkDescriptorSetLayoutBinding samplerLayoutBinding{};
@@ -1378,6 +1378,7 @@ namespace VE {
         m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
         m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
         m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+        m_ImagesInFlight.resize(m_SwapChainImages.size(), VK_NULL_HANDLE);
 
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1390,7 +1391,7 @@ namespace VE {
             if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
                 vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
                 vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) {
-                throw std::runtime_error("Senkronizasyon nesneleri oluşturulamadı!");
+                throw std::runtime_error("Senkronizasyon objeleri oluşturulamadı!");
             }
         }
     }
@@ -1399,6 +1400,11 @@ namespace VE {
         UniformBufferObject ubo{};
         ubo.view = camera.GetViewMatrix();
         ubo.proj = camera.GetProjectionMatrix();
+        
+        // Light data (vec4 for alignment)
+        ubo.lightPos = glm::vec4(5.0f, 10.0f, 5.0f, 1.0f);
+        ubo.lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        ubo.viewPos = glm::vec4(camera.GetPosition(), 1.0f);
 
         memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
@@ -1415,6 +1421,13 @@ namespace VE {
         } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
             throw std::runtime_error("Swap Chain görüntüsü alınamadı!");
         }
+
+        // Check if a previous frame is using this image (i.e. there is its fence to wait on)
+        if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+            vkWaitForFences(m_Device, 1, &m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+        }
+        // Mark the image as now being in use by this frame
+        m_ImagesInFlight[imageIndex] = m_InFlightFences[m_CurrentFrame];
 
         updateUniformBuffer(m_CurrentFrame, camera);
 
@@ -1457,7 +1470,7 @@ namespace VE {
         result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-            // Swapchain recreate (TBD in Faz 1 polish)
+            recreateSwapChain();
         } else if (result != VK_SUCCESS) {
             throw std::runtime_error("İmaj sunulamadı (Present)!");
         }
@@ -1520,6 +1533,10 @@ namespace VE {
         for (const auto& shape : shapes) {
             for (const auto& index : shape.mesh.indices) {
                 Vertex vertex{};
+                vertex.pos = {0.0f, 0.0f, 0.0f};
+                vertex.color = {1.0f, 1.0f, 1.0f};
+                vertex.normal = {0.0f, 0.0f, 0.0f};
+                vertex.texCoord = {0.0f, 0.0f};
 
                 vertex.pos = {
                     attrib.vertices[3 * index.vertex_index + 0],
@@ -1532,6 +1549,16 @@ namespace VE {
                         attrib.texcoords[2 * index.texcoord_index + 0],
                         1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                     };
+                }
+
+                if (index.normal_index >= 0) {
+                    vertex.normal = {
+                        attrib.normals[3 * index.normal_index + 0],
+                        attrib.normals[3 * index.normal_index + 1],
+                        attrib.normals[3 * index.normal_index + 2]
+                    };
+                } else {
+                    vertex.normal = {0.0f, 0.0f, 0.0f};
                 }
 
                 vertex.color = {1.0f, 1.0f, 1.0f};

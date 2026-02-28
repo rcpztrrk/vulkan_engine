@@ -1,4 +1,4 @@
-# Vulkan Engine
+﻿# Vulkan Engine
 
 A modular 3D graphics and physics engine built with C++ and Vulkan API.
 
@@ -7,6 +7,11 @@ A modular 3D graphics and physics engine built with C++ and Vulkan API.
 This project focuses on developing a high-performance graphics and physics engine. The current implementation uses an Entity Component System (ECS) architecture for efficient object management and a custom physics engine for dynamic simulations.
 
 ## Features
+
+### Phase 5.5: Animation-to-Bake Bridge (In Progress)
+- Animation pipeline preparation for deterministic playback.
+- Shot authoring foundations (camera/light presets + scene snapshots).
+- Bake-ready stylization preparation (pixel snap + palette preview workflow).
 
 ### Phase 5: Physics Engine (Completed)
 - **Collision Shapes:** AABB and Sphere colliders integration (`ColliderComponent`).

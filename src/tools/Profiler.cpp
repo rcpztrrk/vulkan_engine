@@ -9,6 +9,7 @@ namespace VE {
     std::vector<float> Profiler::s_FrameTimeHistory;
 
     void Profiler::Update(float deltaTime) {
+        if (deltaTime < 0.000001f) deltaTime = 0.000001f;
         s_FrameTime = deltaTime * 1000.0f; // ms
         s_FPS = 1.0f / deltaTime;
 

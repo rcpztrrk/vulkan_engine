@@ -11,7 +11,7 @@ namespace VE {
     Application::Application() {
         s_Instance = this;
         Logger::Init();
-        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine - Phase 5"));
+        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine - Phase 6 Lighting Fix"));
         m_Renderer = std::make_unique<VulkanRenderer>(m_Window->GetNativeWindow());
         m_Renderer->Init();
 
@@ -29,7 +29,7 @@ namespace VE {
         
         auto& floorRb = m_Scene->GetRegistry().emplace<RigidBodyComponent>(floor);
         floorRb.Body->SetMass(0.0f); // Static
-        m_Scene->GetRegistry().emplace<ColliderComponent>(floor, AABBCollider{ floorTc.Scale });
+        m_Scene->GetRegistry().emplace<ColliderComponent>(floor, AABBCollider{ floorTc.Scale * 0.5f });
 
         // Create multiple test entities
         for (int i = 0; i < 3; i++) {
@@ -42,7 +42,7 @@ namespace VE {
             m_Scene->GetRegistry().emplace<MeshComponent>(entity, "assets/models/cube.obj");
             auto& rb = m_Scene->GetRegistry().emplace<RigidBodyComponent>(entity);
             rb.Body->SetMass(1.0f);
-            m_Scene->GetRegistry().emplace<ColliderComponent>(entity, AABBCollider{ tc.Scale });
+            m_Scene->GetRegistry().emplace<ColliderComponent>(entity, AABBCollider{ tc.Scale * 0.5f });
         }
     }
 
