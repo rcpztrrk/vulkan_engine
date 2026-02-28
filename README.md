@@ -8,6 +8,13 @@ This project focuses on developing a high-performance graphics and physics engin
 
 ## Features
 
+### Phase 5: Physics Engine (Completed)
+- **Collision Shapes:** AABB and Sphere colliders integration (`ColliderComponent`).
+- **Narrowphase Detection:** Mathematical intersection tests (`Sphere-Sphere`, `AABB-AABB`, `Sphere-AABB`).
+- **Collision Response:** Prevent object sinking using Positional Correction (Linear Projection).
+- **Impulse Resolution:** Instantaneous velocity changes to calculate realistic bouncy impacts.
+- **Dynamic & Static Bodies:** Physics Engine correctly ignores collisions between static (infinite mass) objects while resolving dynamic ones.
+
 ### Phase 4: UI, Camera & Interaction (Completed)
 - **ImGui Integration:** Debug and control panels for real-time engine monitoring.
 - **Fly Camera:** Advanced 3D camera with mouse-look and WASD controls.
