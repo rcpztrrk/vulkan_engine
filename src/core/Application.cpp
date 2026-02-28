@@ -3,6 +3,7 @@
 #include "Components.h"
 #include "tools/Profiler.h"
 #include "core/Input.h"
+#include "physics/Colliders.h"
 
 namespace VE {
     Application* Application::s_Instance = nullptr;
@@ -10,7 +11,7 @@ namespace VE {
     Application::Application() {
         s_Instance = this;
         Logger::Init();
-        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine - Phase 4"));
+        m_Window = std::make_unique<Window>(WindowProps("Vulkan Engine - Phase 5"));
         m_Renderer = std::make_unique<VulkanRenderer>(m_Window->GetNativeWindow());
         m_Renderer->Init();
 
@@ -25,17 +26,23 @@ namespace VE {
         floorTc.Translation = glm::vec3(0.0f, -5.0f, 0.0f);
         floorTc.Scale = glm::vec3(20.0f, 0.1f, 20.0f);
         m_Scene->GetRegistry().emplace<MeshComponent>(floor, "assets/models/cube.obj"); 
+        
+        auto& floorRb = m_Scene->GetRegistry().emplace<RigidBodyComponent>(floor);
+        floorRb.Body->SetMass(0.0f); // Static
+        m_Scene->GetRegistry().emplace<ColliderComponent>(floor, AABBCollider{ floorTc.Scale });
 
         // Create multiple test entities
         for (int i = 0; i < 3; i++) {
             auto entity = m_Scene->CreateEntity("Cube " + std::to_string(i));
             
             auto& tc = m_Scene->GetRegistry().get<TransformComponent>(entity);
-            tc.Translation = glm::vec3(i * 5.0f - 5.0f, i * 2.0f, 0.0f);
-            tc.Rotation = glm::vec3(0.0f, glm::radians(i * 45.0f), 0.0f);
+            tc.Translation = glm::vec3(i * 5.0f - 5.0f, i * 4.0f + 5.0f, 0.0f);
+            tc.Rotation = glm::vec3(0.0f); // Keep rotation 0 for AABB
             
             m_Scene->GetRegistry().emplace<MeshComponent>(entity, "assets/models/cube.obj");
-            m_Scene->GetRegistry().emplace<RigidBodyComponent>(entity);
+            auto& rb = m_Scene->GetRegistry().emplace<RigidBodyComponent>(entity);
+            rb.Body->SetMass(1.0f);
+            m_Scene->GetRegistry().emplace<ColliderComponent>(entity, AABBCollider{ tc.Scale });
         }
     }
 

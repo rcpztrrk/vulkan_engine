@@ -17,6 +17,8 @@ namespace VE {
         void SetGravity(const glm::vec3& gravity) { m_Gravity = gravity; }
 
     private:
+        void ResolveCollisions(entt::registry& registry);
+
         glm::vec3 m_Gravity{ 0.0f, -9.81f, 0.0f };
     };
 
